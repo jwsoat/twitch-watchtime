@@ -278,10 +278,11 @@ def stats_users():
     with db() as conn:
         rows = conn.execute("""
             SELECT
-                COALESCE(twitch_user, 'anonymous') AS user,
+                twitch_user AS user,
                 MAX(ts) AS last_ts,
                 COUNT(*) AS count
             FROM heartbeats
+            WHERE twitch_user IS NOT NULL
             GROUP BY twitch_user
             ORDER BY last_ts DESC
         """).fetchall()
