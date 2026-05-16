@@ -221,6 +221,24 @@ When ready to layer in real auth:
 
 No DB migration required at that time — `twitch_user` is already the join key.
 
+## Future extension — Phase 3: Home Assistant integration
+
+Pattern modelled on the [Tautulli integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/tautulli) (Plex monitoring), since the shape of the problem is nearly identical: poll a self-hosted REST API and expose useful state as sensors.
+
+Anticipated structure (custom component `twitch_watchtime`):
+
+- **`config_flow.py`** — collects `host` (e.g. `http://192.168.1.100:8765`), `api_key`, and optional `twitch_user` filter. Validates by calling `/health` and `/stats/users`.
+- **`coordinator.py`** — `DataUpdateCoordinator` polling every 60s, hitting `/stats/today`, `/stats/now`, `/stats/top_channel?window=today`, and `/stats/total?window=today` in parallel and caching the merged result.
+- **`sensor.py`** — entities derived from coordinator data:
+  - `sensor.watchtime_today` — state = seconds watched today, unit `s`, attrs: `formatted` (`"3h 42m"`), `top_channel`, `top_channel_seconds`.
+  - `sensor.watchtime_now_watching` — state = current channel name (or `"idle"`), attrs: `category`, `title`, `started_at`.
+  - `sensor.watchtime_week_total` — total seconds this week.
+  - `sensor.watchtime_top_channel_today` — channel name, attrs: `seconds`, `category`.
+  - Optional per-user variants by adding a `user` filter in the config entry; the entity unique_id incorporates the login.
+- **`binary_sensor.py`** — `binary_sensor.watchtime_active` — on when `/stats/now` returned a hit in the last 120s. Useful for automations ("turn the office light purple when watching").
+
+This shapes Phase 2's API design: every endpoint already returns plain JSON, supports `?user=` for multi-account HA setups, and `/stats/now` exists precisely so a binary sensor can flip on/off cheaply. No backend changes needed for Phase 3 itself.
+
 ## Out of scope
 
 - Streaming categories per channel breakdown beyond the TV panel.
