@@ -1,10 +1,23 @@
 const STORAGE_KEY = "watchtime_api_key";
-const SCOREBOARD_MS = 30_000;
+const ACCOUNT_KEY = "watchtime_account";  // shared with /
+const SCOREBOARD_MS = 10_000;
 const PANEL_MS = 15_000;
+
+// Inherit the dashboard's account selection. The dashboard stores "" to mean
+// "All accounts", so an empty string is meaningful — don't fall through it.
+function initialUser() {
+  const qs = new URLSearchParams(location.search).get("user");
+  if (qs) return qs;
+  const saved = localStorage.getItem(ACCOUNT_KEY);
+  if (saved !== null) return saved || null;  // "" → null = all accounts
+  return null;  // no preference yet — pickDefaultUser will fill it in
+}
 
 const state = {
   apiKey: localStorage.getItem(STORAGE_KEY) || null,
-  user: new URLSearchParams(location.search).get("user") || null,
+  user: initialUser(),
+  hasUserPreference: localStorage.getItem(ACCOUNT_KEY) !== null
+                     || !!new URLSearchParams(location.search).get("user"),
   panelIdx: 0,
 };
 
@@ -59,7 +72,7 @@ function fmtDuration(seconds) {
 
 // ---------- Default user selection ----------
 async function pickDefaultUser() {
-  if (state.user) return;  // explicit ?user=
+  if (state.hasUserPreference) return;  // honor dashboard / ?user=
   try {
     const { users } = await api("/stats/users");
     if (users.length > 0) state.user = users[0].user;
