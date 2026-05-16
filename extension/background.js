@@ -2,7 +2,7 @@
 
 const QUEUE_KEY = "hb_queue";
 const FLUSH_ALARM = "flush";
-const FLUSH_INTERVAL_MINUTES = 1;
+const FLUSH_INTERVAL_MINUTES = 0.5;  // 30 seconds — MV3 minimum
 const MAX_QUEUE = 5000;
 
 // Recreate alarm if the service worker was evicted and restarted

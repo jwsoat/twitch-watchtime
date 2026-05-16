@@ -2,7 +2,7 @@
 // Job: figure out (a) what channel is on screen, (b) whether the video is
 // playing, (c) whether the user is active, and tell the background worker.
 
-const HEARTBEAT_MS = 60 * 1000;
+const HEARTBEAT_MS = 10 * 1000;
 const IDLE_THRESHOLD_MS = 5 * 60 * 1000;
 
 let lastActivity = Date.now();
