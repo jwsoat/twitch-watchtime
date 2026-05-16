@@ -170,6 +170,16 @@ html, body {
 .gate button:hover { background: var(--purple-hover); }
 .gate .err { color: #ff6b6b; font-size: 12px; margin-top: 8px; }
 
+/* ---------- Chart boxes ---------- */
+/* Chart.js with maintainAspectRatio:false sizes from its parent, so the
+   canvas needs a height-constrained wrapper or the card grows on every
+   redraw. */
+.chart-box { position: relative; height: 240px; }
+.chart-box > canvas { width: 100% !important; height: 100% !important; }
+
+body.tv .tv-chart-box { position: relative; width: 100%; height: 100%; }
+body.tv .tv-chart-box > canvas { width: 100% !important; height: 100% !important; }
+
 /* ---------- Hidden ---------- */
 .hidden { display: none !important; }
 
