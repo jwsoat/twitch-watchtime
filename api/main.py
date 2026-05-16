@@ -5,6 +5,7 @@ every N seconds while a Twitch video is playing; we store them and compute
 watch time as COUNT(heartbeats) * interval.
 """
 import os
+import pathlib
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -12,6 +13,8 @@ from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 API_KEY = os.environ["API_KEY"]
@@ -29,6 +32,20 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+STATIC_DIR = pathlib.Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/tv", include_in_schema=False)
+def tv():
+    return FileResponse(STATIC_DIR / "tv.html")
 
 
 # ---------- DB ----------
