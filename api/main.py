@@ -285,6 +285,28 @@ def stats_categories(window: str = "today", user: Optional[str] = None):
     }
 
 
+@app.get("/stats/recent", dependencies=[Depends(require_api_key)])
+def stats_recent(limit: int = 5, user: Optional[str] = None):
+    """Last N distinct channels with their last-watched timestamp."""
+    limit = max(1, min(limit, 50))
+    user_sql, user_params = _user_clause(user)
+    with db() as conn:
+        rows = conn.execute(f"""
+            SELECT channel, MAX(ts) AS last_ts
+            FROM heartbeats
+            WHERE 1=1 {user_sql}
+            GROUP BY channel
+            ORDER BY last_ts DESC
+            LIMIT ?
+        """, (*user_params, limit)).fetchall()
+    return {
+        "recent": [
+            {"channel": r["channel"], "last_ts": r["last_ts"]}
+            for r in rows
+        ]
+    }
+
+
 # ---------- Helpers ----------
 
 def _user_clause(user: Optional[str]):

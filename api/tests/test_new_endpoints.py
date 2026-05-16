@@ -99,3 +99,39 @@ def test_categories_user_filter(client, auth_headers, db):
     res = client.get("/stats/categories?window=today&user=user_a", headers=auth_headers)
     cats = [c["category"] for c in res.json()["categories"]]
     assert cats == ["A"]
+
+
+# ---------- /stats/recent ----------
+
+def test_recent_deduplicates_by_channel_keeping_latest_ts(client, auth_headers, db):
+    now = int(time.time())
+    # alice has two entries; latest at now-10
+    insert_heartbeat(db, ts=now - 100, channel="alice")
+    insert_heartbeat(db, ts=now - 10, channel="alice")
+    insert_heartbeat(db, ts=now - 50, channel="bob")
+    db.commit()
+    res = client.get("/stats/recent", headers=auth_headers)
+    chans = res.json()["recent"]
+    assert len(chans) == 2
+    assert chans[0]["channel"] == "alice"
+    assert chans[0]["last_ts"] == now - 10
+    assert chans[1]["channel"] == "bob"
+
+
+def test_recent_respects_limit(client, auth_headers, db):
+    now = int(time.time())
+    for i, name in enumerate(["a", "b", "c", "d", "e", "f"]):
+        insert_heartbeat(db, ts=now - i * 10, channel=name)
+    db.commit()
+    res = client.get("/stats/recent?limit=3", headers=auth_headers)
+    assert len(res.json()["recent"]) == 3
+
+
+def test_recent_user_filter(client, auth_headers, db):
+    now = int(time.time())
+    insert_heartbeat(db, ts=now - 10, channel="alice", twitch_user="user_a")
+    insert_heartbeat(db, ts=now - 20, channel="bob", twitch_user="user_b")
+    db.commit()
+    res = client.get("/stats/recent?user=user_a", headers=auth_headers)
+    chans = [r["channel"] for r in res.json()["recent"]]
+    assert chans == ["alice"]
