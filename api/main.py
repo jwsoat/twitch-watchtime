@@ -186,42 +186,34 @@ def stats_daily(days: int = 30, include_passive: bool = True, user: Optional[str
 
 
 @app.get("/stats/top_channel", dependencies=[Depends(require_api_key)])
-def stats_top_channel(window: str = "today"):
-    """Convenience endpoint for Home Assistant — single channel name + seconds."""
-    if window == "today":
-        since = _local_midnight()
-    elif window == "week":
-        since = int(time.time()) - 7 * 86400
-    else:
-        since = 0
+def stats_top_channel(window: str = "today", user: Optional[str] = None):
+    """Single channel name + seconds for the given window."""
+    since = _window_since(window)
+    user_sql, user_params = _user_clause(user)
     with db() as conn:
-        row = conn.execute("""
+        row = conn.execute(f"""
             SELECT channel, COUNT(*) AS n
             FROM heartbeats
-            WHERE ts >= ?
+            WHERE ts >= ? {user_sql}
             GROUP BY channel
             ORDER BY n DESC
             LIMIT 1
-        """, (since,)).fetchone()
+        """, (since, *user_params)).fetchone()
     if not row:
         return {"channel": None, "seconds": 0}
     return {"channel": row["channel"], "seconds": _seconds_from_count(row["n"])}
 
 
 @app.get("/stats/total", dependencies=[Depends(require_api_key)])
-def stats_total(window: str = "today"):
-    """Total seconds watched across all channels in a window."""
-    if window == "today":
-        since = _local_midnight()
-    elif window == "week":
-        since = int(time.time()) - 7 * 86400
-    else:
-        since = 0
+def stats_total(window: str = "today", user: Optional[str] = None):
+    """Total seconds in a window."""
+    since = _window_since(window)
+    user_sql, user_params = _user_clause(user)
     with db() as conn:
-        row = conn.execute(
-            "SELECT COUNT(*) AS n FROM heartbeats WHERE ts >= ?",
-            (since,),
-        ).fetchone()
+        row = conn.execute(f"""
+            SELECT COUNT(*) AS n FROM heartbeats
+            WHERE ts >= ? {user_sql}
+        """, (since, *user_params)).fetchone()
     return {"window": window, "seconds": _seconds_from_count(row["n"])}
 
 
@@ -259,6 +251,14 @@ def _stats_since(since: int, include_passive: bool, user: Optional[str] = None):
             for r in rows
         ],
     }
+
+
+def _window_since(window: str) -> int:
+    if window == "today":
+        return _local_midnight()
+    if window == "week":
+        return int(time.time()) - 7 * 86400
+    return 0  # 'all' or unknown
 
 
 def _local_midnight() -> int:

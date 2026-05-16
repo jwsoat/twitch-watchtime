@@ -60,3 +60,21 @@ def test_daily_user_filter(client, auth_headers, db):
     data = res.json()
     total = sum(d["seconds"] for d in data["days"])
     assert total == 120  # only user_a's 2 heartbeats counted
+
+
+def test_top_channel_user_filter(client, auth_headers, db):
+    _seed(db)
+    res = client.get("/stats/top_channel?window=today&user=user_a", headers=auth_headers)
+    assert res.json() == {"channel": "alice", "seconds": 120}
+
+
+def test_total_user_filter(client, auth_headers, db):
+    _seed(db)
+    res = client.get("/stats/total?window=today&user=user_a", headers=auth_headers)
+    assert res.json() == {"window": "today", "seconds": 120}
+
+
+def test_total_user_anonymous(client, auth_headers, db):
+    _seed(db)
+    res = client.get("/stats/total?window=today&user=anonymous", headers=auth_headers)
+    assert res.json()["seconds"] == 60  # carol's single heartbeat
