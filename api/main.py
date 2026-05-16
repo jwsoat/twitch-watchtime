@@ -42,8 +42,8 @@ def init_db():
                 channel     TEXT    NOT NULL,
                 category    TEXT,
                 title       TEXT,
-                state       TEXT    NOT NULL,
-                tab_visible INTEGER NOT NULL,
+                state       TEXT    NOT NULL CHECK(state IN ('active','passive','audio_only')),
+                tab_visible INTEGER NOT NULL CHECK(tab_visible IN (0,1)),
                 client_id   TEXT    NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_heartbeats_ts

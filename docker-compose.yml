@@ -3,8 +3,8 @@ services:
     build: ./api
     container_name: twitch-watch-api
     restart: unless-stopped
+    env_file: .env
     environment:
-      - API_KEY=${API_KEY}
       - DB_PATH=/data/watchtime.db
       - HEARTBEAT_INTERVAL_SECONDS=60
       - TZ=Pacific/Auckland

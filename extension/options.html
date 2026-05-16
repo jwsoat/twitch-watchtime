@@ -1,45 +1,158 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Twitch Watch Time — Settings</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: ui-monospace, "DM Mono", monospace;
+      min-height: 100vh;
       background: #0d1a14;
       color: #d4e4d6;
-      padding: 2rem;
-      max-width: 480px;
-      margin: 0 auto;
+      font-family: 'DM Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+      font-size: 13px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
     }
-    h1 { font-weight: 400; font-size: 1.4rem; }
-    label { display: block; margin-top: 1.2rem; font-size: 0.85rem; opacity: 0.7; }
-    input {
-      width: 100%; padding: 0.6rem; margin-top: 0.3rem;
-      background: #16271e; border: 1px solid #2a4a36;
-      color: #d4e4d6; border-radius: 4px; font-family: inherit;
+
+    .panel {
+      width: 100%;
+      max-width: 460px;
+      background: #16271e;
+      border: 1px solid #2a4a36;
+      border-radius: 6px;
+      padding: 28px 32px 32px;
     }
-    button {
-      margin-top: 1.5rem; padding: 0.6rem 1.2rem;
-      background: #2a4a36; color: #d4e4d6;
-      border: none; border-radius: 4px; cursor: pointer;
+
+    h1 {
+      font-size: 13px;
+      font-weight: 500;
+      color: #8fca9c;
+      letter-spacing: 0.1em;
+      margin-bottom: 28px;
+    }
+
+    .field { margin-bottom: 18px; }
+
+    label {
+      display: block;
+      font-size: 11px;
+      color: #6a9a78;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    input[type="url"],
+    input[type="password"] {
+      width: 100%;
+      background: #0d1a14;
+      border: 1px solid #2a4a36;
+      border-radius: 4px;
+      color: #d4e4d6;
       font-family: inherit;
+      font-size: 13px;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.15s;
     }
-    button:hover { background: #3a6048; }
-    .status { margin-top: 1rem; font-size: 0.85rem; opacity: 0.7; }
-    .stat { margin-top: 0.4rem; }
+
+    input:focus { border-color: #4a8a5a; }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 22px;
+      margin-bottom: 28px;
+    }
+
+    button {
+      background: #2a4a36;
+      border: 1px solid #3a6a4a;
+      border-radius: 4px;
+      color: #d4e4d6;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 7px 18px;
+      transition: background 0.15s;
+    }
+
+    button:hover { background: #3a5a46; }
+    button:active { background: #1d3629; }
+
+    .status-msg {
+      font-size: 12px;
+      color: #8fca9c;
+      min-height: 16px;
+    }
+
+    .status-msg.error { color: #d07070; }
+
+    hr {
+      border: none;
+      border-top: 1px solid #2a4a36;
+      margin-bottom: 22px;
+    }
+
+    .info-grid { display: grid; gap: 14px; }
+
+    .info-label {
+      font-size: 11px;
+      color: #6a9a78;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .info-value {
+      background: #0d1a14;
+      border: 1px solid #2a4a36;
+      border-radius: 4px;
+      padding: 7px 10px;
+      font-size: 12px;
+      color: #8fca9c;
+      word-break: break-all;
+    }
   </style>
 </head>
 <body>
-  <h1>Twitch Watch Time Logger</h1>
-  <label>API URL <small>(e.g. https://watch.jwsoat.co.nz)</small></label>
-  <input id="apiUrl" type="url" placeholder="https://...">
-  <label>API Key</label>
-  <input id="apiKey" type="password">
-  <button id="save">Save</button>
-  <div class="status">
-    <div class="stat">Client ID: <span id="clientId">—</span></div>
-    <div class="stat">Queued heartbeats: <span id="queueLen">—</span></div>
+  <div class="panel">
+    <h1>TWITCH WATCH TIME</h1>
+
+    <div class="field">
+      <label for="apiUrl">API URL</label>
+      <input id="apiUrl" type="url" placeholder="http://your-server:8765">
+    </div>
+
+    <div class="field">
+      <label for="apiKey">API Key</label>
+      <input id="apiKey" type="password" placeholder="paste your key">
+    </div>
+
+    <div class="actions">
+      <button id="save">Save</button>
+      <span class="status-msg" id="statusMsg"></span>
+    </div>
+
+    <hr>
+
+    <div class="info-grid">
+      <div>
+        <div class="info-label">Client ID</div>
+        <div class="info-value" id="clientId">—</div>
+      </div>
+      <div>
+        <div class="info-label">Queue Length</div>
+        <div class="info-value" id="queueLen">—</div>
+      </div>
+    </div>
   </div>
   <script src="options.js"></script>
 </body>

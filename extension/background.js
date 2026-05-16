@@ -5,6 +5,11 @@ const FLUSH_ALARM = "flush";
 const FLUSH_INTERVAL_MINUTES = 1;
 const MAX_QUEUE = 5000;
 
+// Recreate alarm if the service worker was evicted and restarted
+chrome.alarms.get(FLUSH_ALARM, (alarm) => {
+  if (!alarm) chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: FLUSH_INTERVAL_MINUTES });
+});
+
 async function getSettings() {
   const { apiUrl, apiKey, clientId } = await chrome.storage.local.get(
     ["apiUrl", "apiKey", "clientId"]
