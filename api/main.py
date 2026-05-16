@@ -217,6 +217,30 @@ def stats_total(window: str = "today", user: Optional[str] = None):
     return {"window": window, "seconds": _seconds_from_count(row["n"])}
 
 
+@app.get("/stats/now", dependencies=[Depends(require_api_key)])
+def stats_now(user: Optional[str] = None):
+    """Most recent heartbeat in last 120s, or {'now': None}."""
+    cutoff = int(time.time()) - 120
+    user_sql, user_params = _user_clause(user)
+    with db() as conn:
+        row = conn.execute(f"""
+            SELECT ts, channel, category, title, twitch_user
+            FROM heartbeats
+            WHERE ts >= ? {user_sql}
+            ORDER BY ts DESC
+            LIMIT 1
+        """, (cutoff, *user_params)).fetchone()
+    if not row:
+        return {"now": None}
+    return {
+        "ts": row["ts"],
+        "channel": row["channel"],
+        "category": row["category"],
+        "title": row["title"],
+        "twitch_user": row["twitch_user"],
+    }
+
+
 # ---------- Helpers ----------
 
 def _user_clause(user: Optional[str]):
