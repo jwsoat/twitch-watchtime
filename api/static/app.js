@@ -139,6 +139,7 @@ async function updateHero() {
 
   if (now && now.channel) {
     $("live-indicator").classList.remove("hidden");
+    $("live-label").textContent = now.twitch_user ? `${now.twitch_user}'s now watching` : "Now watching";
     $("live-channel").textContent = now.channel;
     $("live-title").textContent = now.title || "";
     $("live-category").textContent = now.category || "";
