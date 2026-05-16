@@ -186,12 +186,54 @@ async function updateTopChannels() {
   }
 }
 
+// ---------- Daily chart ----------
+let dailyChart = null;
+
+async function updateDailyChart() {
+  const data = await api(withUser("/stats/daily?days=30"));
+  const labels = data.days.map(d => d.day.slice(5));  // MM-DD
+  const values = data.days.map(d => d.seconds / 3600);  // hours
+
+  const ctx = $("daily-chart").getContext("2d");
+  if (dailyChart) {
+    dailyChart.data.labels = labels;
+    dailyChart.data.datasets[0].data = values;
+    dailyChart.update();
+    return;
+  }
+  dailyChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: "#9146FF",
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#adadb8", maxRotation: 0 }, grid: { display: false } },
+        y: {
+          ticks: { color: "#adadb8", callback: (v) => v + "h" },
+          grid: { color: "#2f2f35" },
+          beginAtZero: true,
+        },
+      },
+    },
+  });
+}
+
 // ---------- Refresh ----------
 async function refresh() {
   try {
     await Promise.all([
       updateHero(),
       updateTopChannels(),
+      updateDailyChart(),
     ]);
   } catch (e) {
     console.warn("refresh failed", e);
