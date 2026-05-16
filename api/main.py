@@ -142,22 +142,22 @@ def _seconds_from_count(n: int) -> int:
 
 
 @app.get("/stats/today", dependencies=[Depends(require_api_key)])
-def stats_today(include_passive: bool = True):
+def stats_today(include_passive: bool = True, user: Optional[str] = None):
     """Total watch time today (server local time) per channel."""
     midnight = _local_midnight()
-    return _stats_since(midnight, include_passive)
+    return _stats_since(midnight, include_passive, user)
 
 
 @app.get("/stats/week", dependencies=[Depends(require_api_key)])
-def stats_week(include_passive: bool = True):
+def stats_week(include_passive: bool = True, user: Optional[str] = None):
     """Last 7 days, per channel."""
     since = int(time.time()) - 7 * 86400
-    return _stats_since(since, include_passive)
+    return _stats_since(since, include_passive, user)
 
 
 @app.get("/stats/all", dependencies=[Depends(require_api_key)])
-def stats_all(include_passive: bool = True):
-    return _stats_since(0, include_passive)
+def stats_all(include_passive: bool = True, user: Optional[str] = None):
+    return _stats_since(0, include_passive, user)
 
 
 @app.get("/stats/daily", dependencies=[Depends(require_api_key)])
@@ -226,16 +226,31 @@ def stats_total(window: str = "today"):
 
 # ---------- Helpers ----------
 
-def _stats_since(since: int, include_passive: bool):
+def _user_clause(user: Optional[str]):
+    """
+    Build a (sql_fragment, params) tuple for the twitch_user filter.
+    - None -> ('', ()) means no filter.
+    - 'anonymous' -> ('AND twitch_user IS NULL', ())
+    - other -> ('AND twitch_user = ?', (value,))
+    """
+    if user is None:
+        return "", ()
+    if user == "anonymous":
+        return "AND twitch_user IS NULL", ()
+    return "AND twitch_user = ?", (user,)
+
+
+def _stats_since(since: int, include_passive: bool, user: Optional[str] = None):
     state_filter = "" if include_passive else "AND state = 'active'"
+    user_sql, user_params = _user_clause(user)
     with db() as conn:
         rows = conn.execute(f"""
             SELECT channel, COUNT(*) AS n
             FROM heartbeats
-            WHERE ts >= ? {state_filter}
+            WHERE ts >= ? {state_filter} {user_sql}
             GROUP BY channel
             ORDER BY n DESC
-        """, (since,)).fetchall()
+        """, (since, *user_params)).fetchall()
     return {
         "interval_seconds": HEARTBEAT_INTERVAL,
         "channels": [
