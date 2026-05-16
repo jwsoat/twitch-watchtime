@@ -258,6 +258,19 @@ def stats_now(user: Optional[str] = None):
     }
 
 
+@app.get("/stats/channel", dependencies=[Depends(require_api_key)])
+def stats_channel(channel: str, window: str = "today", user: Optional[str] = None):
+    """Seconds watched for a specific channel in a window."""
+    since = _window_since(window)
+    user_sql, user_params = _user_clause(user)
+    with db() as conn:
+        row = conn.execute(f"""
+            SELECT COUNT(*) AS n FROM heartbeats
+            WHERE ts >= ? AND channel = ? {user_sql}
+        """, (since, channel, *user_params)).fetchone()
+    return {"channel": channel, "window": window, "seconds": _seconds_from_count(row["n"])}
+
+
 @app.get("/stats/users", dependencies=[Depends(require_api_key)])
 def stats_users():
     """Distinct twitch_user values with last activity and heartbeat count.
