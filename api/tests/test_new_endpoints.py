@@ -65,3 +65,37 @@ def test_users_ordered_by_last_activity_desc(client, auth_headers, db):
     res = client.get("/stats/users", headers=auth_headers)
     logins = [u["user"] for u in res.json()["users"]]
     assert logins == ["user_new", "user_old"]
+
+
+# ---------- /stats/categories ----------
+
+def test_categories_returns_top_5_by_seconds(client, auth_headers, db):
+    now = int(time.time())
+    # 3 heartbeats Just Chatting, 1 League, 1 Valorant
+    for _ in range(3):
+        insert_heartbeat(db, ts=now - 10, channel="x", category="Just Chatting")
+    insert_heartbeat(db, ts=now - 20, channel="y", category="League of Legends")
+    insert_heartbeat(db, ts=now - 30, channel="z", category="Valorant")
+    db.commit()
+    res = client.get("/stats/categories?window=today", headers=auth_headers)
+    cats = res.json()["categories"]
+    assert cats[0]["category"] == "Just Chatting"
+    assert cats[0]["seconds"] == 180
+    assert len(cats) == 3
+
+
+def test_categories_ignores_null_category(client, auth_headers, db):
+    insert_heartbeat(db, ts=int(time.time()) - 10, channel="x", category=None)
+    db.commit()
+    res = client.get("/stats/categories?window=today", headers=auth_headers)
+    assert res.json()["categories"] == []
+
+
+def test_categories_user_filter(client, auth_headers, db):
+    now = int(time.time())
+    insert_heartbeat(db, ts=now - 10, channel="x", category="A", twitch_user="user_a")
+    insert_heartbeat(db, ts=now - 20, channel="x", category="B", twitch_user="user_b")
+    db.commit()
+    res = client.get("/stats/categories?window=today&user=user_a", headers=auth_headers)
+    cats = [c["category"] for c in res.json()["categories"]]
+    assert cats == ["A"]

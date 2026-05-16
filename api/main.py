@@ -263,6 +263,28 @@ def stats_users():
     }
 
 
+@app.get("/stats/categories", dependencies=[Depends(require_api_key)])
+def stats_categories(window: str = "today", user: Optional[str] = None):
+    """Top 5 categories by seconds in window. Excludes NULL categories."""
+    since = _window_since(window)
+    user_sql, user_params = _user_clause(user)
+    with db() as conn:
+        rows = conn.execute(f"""
+            SELECT category, COUNT(*) AS n
+            FROM heartbeats
+            WHERE ts >= ? AND category IS NOT NULL {user_sql}
+            GROUP BY category
+            ORDER BY n DESC
+            LIMIT 5
+        """, (since, *user_params)).fetchall()
+    return {
+        "categories": [
+            {"category": r["category"], "seconds": _seconds_from_count(r["n"])}
+            for r in rows
+        ]
+    }
+
+
 # ---------- Helpers ----------
 
 def _user_clause(user: Optional[str]):
