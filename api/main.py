@@ -33,6 +33,13 @@ app.add_middleware(
 
 # ---------- DB ----------
 
+def migrate_db(conn):
+    """Idempotent column additions and other schema migrations."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(heartbeats)")}
+    if "twitch_user" not in cols:
+        conn.execute("ALTER TABLE heartbeats ADD COLUMN twitch_user TEXT")
+
+
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.executescript("""
@@ -51,6 +58,8 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_heartbeats_channel_ts
                 ON heartbeats(channel, ts);
         """)
+        migrate_db(conn)
+        conn.commit()
 
 
 @contextmanager
