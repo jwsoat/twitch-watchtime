@@ -296,7 +296,7 @@ def stats_users():
 
 @app.get("/stats/categories", dependencies=[Depends(require_api_key)])
 def stats_categories(window: str = "today", user: Optional[str] = None):
-    """Top 5 categories by seconds in window. Excludes NULL categories."""
+    """Top 10 categories by seconds in window. Excludes NULL categories."""
     since = _window_since(window)
     user_sql, user_params = _user_clause(user)
     with db() as conn:
@@ -306,7 +306,7 @@ def stats_categories(window: str = "today", user: Optional[str] = None):
             WHERE ts >= ? AND category IS NOT NULL {user_sql}
             GROUP BY category
             ORDER BY n DESC
-            LIMIT 5
+            LIMIT 10
         """, (since, *user_params)).fetchall()
     return {
         "categories": [
