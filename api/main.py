@@ -319,7 +319,9 @@ def add_channel_link(link: ChannelLink):
 @app.delete("/settings/channel-links/{link_id}", dependencies=[Depends(require_api_key)])
 def delete_channel_link(link_id: int):
     with db() as conn:
-        conn.execute("DELETE FROM channel_links WHERE id = ?", (link_id,))
+        cur = conn.execute("DELETE FROM channel_links WHERE id = ?", (link_id,))
+    if cur.rowcount == 0:
+        raise HTTPException(status_code=404, detail="link not found")
     return {"ok": True}
 
 
