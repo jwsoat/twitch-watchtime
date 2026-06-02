@@ -261,7 +261,7 @@ def get_avatar(platform: str, channel: str):
             cache_file.write_bytes(data)
             return Response(content=data, media_type=_detect_ct(data), headers={"Cache-Control": "public, max-age=604800"})
     except Exception:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/avatars/{platform}/{channel}", dependencies=[Depends(require_api_key)])
@@ -343,6 +343,18 @@ def youtube_heartbeats_batch(batch: YoutubeHeartbeatBatch):
             rows,
         )
     return {"ok": True, "stored": len(rows)}
+
+
+@app.get("/stats/channels", dependencies=[Depends(require_api_key)])
+def all_channels():
+    with db() as conn:
+        tw = [r["channel"] for r in conn.execute(
+            "SELECT DISTINCT channel FROM heartbeats ORDER BY channel"
+        ).fetchall()]
+        yt = [r["channel"] for r in conn.execute(
+            "SELECT DISTINCT channel FROM youtube_heartbeats ORDER BY channel"
+        ).fetchall()]
+    return {"twitch": tw, "youtube": yt}
 
 
 @app.get("/stats/youtube/users", dependencies=[Depends(require_api_key)])

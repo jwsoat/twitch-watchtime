@@ -86,7 +86,8 @@
           <option value="twitch">Twitch</option>
           <option value="youtube">YouTube</option>
         </select>
-        <input id="input-avatar-channel" type="text" placeholder="Channel handle" autocomplete="off" style="flex:1;min-width:120px">
+        <input id="input-avatar-channel" type="text" placeholder="Channel handle" list="channel-suggestions" autocomplete="off" style="flex:1;min-width:120px">
+        <datalist id="channel-suggestions"></datalist>
         <input id="input-avatar-file" type="file" accept="image/*" style="font-size:13px">
         <button type="submit">Upload</button>
       </form>

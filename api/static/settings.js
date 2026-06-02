@@ -149,6 +149,23 @@ $("auto-link-btn").addEventListener("click", async () => {
   }
 });
 
+let _allChannels = { twitch: [], youtube: [] };
+
+async function loadChannelSuggestions() {
+  _allChannels = await apiReq("GET", "/stats/channels");
+  updateChannelDatalist();
+}
+
+function updateChannelDatalist() {
+  const platform = $("input-avatar-platform").value;
+  const dl = $("channel-suggestions");
+  dl.innerHTML = (_allChannels[platform] || [])
+    .map(ch => `<option value="${escapeHtml(ch)}">`)
+    .join("");
+}
+
+$("input-avatar-platform").addEventListener("change", updateChannelDatalist);
+
 async function loadCustomAvatars() {
   const { avatars } = await apiReq("GET", "/avatars/custom");
   const tbody = $("avatars-tbody");
@@ -199,9 +216,7 @@ $("add-avatar-form").addEventListener("submit", async (e) => {
 });
 
 async function boot() {
-  await loadLinks();
-  await loadAccounts();
-  await loadCustomAvatars();
+  await Promise.all([loadLinks(), loadAccounts(), loadCustomAvatars(), loadChannelSuggestions()]);
 }
 
 if (state.apiKey) {
