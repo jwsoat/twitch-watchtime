@@ -331,7 +331,7 @@ async function updateMerged() {
     el.className = "ranked-row";
     el.innerHTML = `
       <div class="rank mono">#${i + 1}</div>
-      <div class="avatar" style="background:${avatarColor(row.avatar)}">${row.avatar[0].toUpperCase()}</div>
+      <div class="avatar" style="background:${avatarColor(row.avatar)}">${row.avatar[0].toUpperCase()}<img src="/avatars/${row.platforms[0]}/${encodeURIComponent(row.avatar)}" alt="" onerror="this.remove()"></div>
       <div class="name">${row.label} ${badges}</div>
       <div class="value mono">${fmtDuration(row.seconds)}</div>
       <div class="bar"><span style="width:${(row.seconds / max * 100).toFixed(1)}%"></span></div>
