@@ -4,6 +4,7 @@ Heartbeat-based watch time tracker. The browser extension POSTs heartbeats
 every N seconds while a Twitch video is playing; we store them and compute
 watch time as COUNT(heartbeats) * interval.
 """
+import json
 import os
 import pathlib
 import re
@@ -14,7 +15,7 @@ import urllib.request
 from contextlib import contextmanager
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Depends
+from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -200,6 +201,40 @@ def health():
 
 _AVATAR_DIR = pathlib.Path(os.environ.get("DB_PATH", "/data/watchtime.db")).parent / "avatars"
 _AVATAR_TTL = 86400 * 7  # 7 days
+_AVATAR_INDEX = _AVATAR_DIR / "custom_index.json"
+
+
+def _avatar_safe(channel: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", channel.lower())
+
+
+def _load_custom_index() -> dict:
+    if _AVATAR_INDEX.exists():
+        try:
+            return json.loads(_AVATAR_INDEX.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_custom_index(index: dict):
+    _AVATAR_INDEX.write_text(json.dumps(index))
+
+
+def _detect_ct(data: bytes) -> str:
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:3] == b"GIF":
+        return "image/gif"
+    if data[:2] in (b"\xff\xd8", b"\xff\xe0", b"\xff\xe1"):
+        return "image/jpeg"
+    return "image/jpeg"
+
+
+@app.get("/avatars/custom", dependencies=[Depends(require_api_key)])
+def list_custom_avatars():
+    index = _load_custom_index()
+    return {"avatars": [{"platform": k.split(":")[0], "channel": k.split(":")[1]} for k in index]}
 
 
 @app.get("/avatars/{platform}/{channel}")
@@ -207,22 +242,60 @@ def get_avatar(platform: str, channel: str):
     if platform not in ("twitch", "youtube"):
         raise HTTPException(status_code=404)
     _AVATAR_DIR.mkdir(exist_ok=True)
-    safe = re.sub(r"[^a-zA-Z0-9_-]", "_", channel.lower())
+    safe = _avatar_safe(channel)
+    # Custom override takes priority
+    custom_file = _AVATAR_DIR / f"custom_{platform}_{safe}"
+    if custom_file.exists():
+        data = custom_file.read_bytes()
+        return Response(content=data, media_type=_detect_ct(data), headers={"Cache-Control": "public, max-age=604800"})
+    # Auto-cache
     cache_file = _AVATAR_DIR / f"{platform}_{safe}"
     if cache_file.exists() and time.time() - cache_file.stat().st_mtime < _AVATAR_TTL:
         data = cache_file.read_bytes()
-        ct = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
-        return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=604800"})
+        return Response(content=data, media_type=_detect_ct(data), headers={"Cache-Control": "public, max-age=604800"})
     try:
         url = f"https://unavatar.io/{platform}/{urllib.parse.quote(channel)}?fallback=404"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = resp.read()
-            ct = resp.headers.get("Content-Type", "image/jpeg").split(";")[0]
             cache_file.write_bytes(data)
-            return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=604800"})
+            return Response(content=data, media_type=_detect_ct(data), headers={"Cache-Control": "public, max-age=604800"})
     except Exception:
         raise HTTPException(status_code=404)
+
+
+@app.post("/avatars/{platform}/{channel}", dependencies=[Depends(require_api_key)])
+async def set_custom_avatar(platform: str, channel: str, file: UploadFile = File(...)):
+    if platform not in ("twitch", "youtube"):
+        raise HTTPException(status_code=404)
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    _AVATAR_DIR.mkdir(exist_ok=True)
+    safe = _avatar_safe(channel)
+    data = await file.read()
+    custom_file = _AVATAR_DIR / f"custom_{platform}_{safe}"
+    custom_file.write_bytes(data)
+    index = _load_custom_index()
+    index[f"{platform}:{channel.lower()}"] = True
+    _save_custom_index(index)
+    return {"ok": True}
+
+
+@app.delete("/avatars/{platform}/{channel}", dependencies=[Depends(require_api_key)])
+def delete_custom_avatar(platform: str, channel: str):
+    _AVATAR_DIR.mkdir(exist_ok=True)
+    safe = _avatar_safe(channel)
+    custom_file = _AVATAR_DIR / f"custom_{platform}_{safe}"
+    if custom_file.exists():
+        custom_file.unlink()
+    # Also clear auto-cache so it re-fetches
+    cache_file = _AVATAR_DIR / f"{platform}_{safe}"
+    if cache_file.exists():
+        cache_file.unlink()
+    index = _load_custom_index()
+    index.pop(f"{platform}:{channel.lower()}", None)
+    _save_custom_index(index)
+    return {"ok": True}
 
 
 @app.post("/heartbeat", dependencies=[Depends(require_api_key)])

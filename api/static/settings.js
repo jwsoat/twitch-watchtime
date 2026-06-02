@@ -149,9 +149,59 @@ $("auto-link-btn").addEventListener("click", async () => {
   }
 });
 
+async function loadCustomAvatars() {
+  const { avatars } = await apiReq("GET", "/avatars/custom");
+  const tbody = $("avatars-tbody");
+  if (!avatars.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted); padding:12px 0">No custom avatars set.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = avatars.map(a => `
+    <tr>
+      <td><span class="platform-badge ${a.platform}">${a.platform === "twitch" ? "TW" : "YT"}</span></td>
+      <td>${escapeHtml(a.channel)}</td>
+      <td><img src="/avatars/${a.platform}/${encodeURIComponent(a.channel)}?t=${Date.now()}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;vertical-align:middle" onerror="this.style.display='none'"></td>
+      <td><button class="del-btn" data-platform="${a.platform}" data-channel="${escapeHtml(a.channel)}">Delete</button></td>
+    </tr>
+  `).join("");
+  tbody.querySelectorAll(".del-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await apiReq("DELETE", `/avatars/${btn.dataset.platform}/${encodeURIComponent(btn.dataset.channel)}`);
+      loadCustomAvatars().catch(console.error);
+    });
+  });
+}
+
+$("add-avatar-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const platform = $("input-avatar-platform").value;
+  const channel = $("input-avatar-channel").value.trim().toLowerCase();
+  const fileInput = $("input-avatar-file");
+  const status = $("avatar-upload-status");
+  if (!channel || !fileInput.files.length) return;
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  status.textContent = "Uploading...";
+  try {
+    const res = await fetch(`/avatars/${platform}/${encodeURIComponent(channel)}`, {
+      method: "POST",
+      headers: { "X-API-Key": state.apiKey },
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    status.textContent = "Uploaded.";
+    $("input-avatar-channel").value = "";
+    fileInput.value = "";
+    loadCustomAvatars().catch(console.error);
+  } catch (err) {
+    status.textContent = `Failed: ${err.message}`;
+  }
+});
+
 async function boot() {
   await loadLinks();
   await loadAccounts();
+  await loadCustomAvatars();
 }
 
 if (state.apiKey) {
