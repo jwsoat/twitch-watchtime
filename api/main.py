@@ -111,6 +111,13 @@ def init_db():
                 youtube_channel TEXT NOT NULL,
                 UNIQUE(twitch_channel, youtube_channel)
             );
+            CREATE TABLE IF NOT EXISTS user_accounts (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                label         TEXT NOT NULL,
+                twitch_user   TEXT,
+                youtube_user  TEXT,
+                UNIQUE(twitch_user, youtube_user)
+            );
         """)
         migrate_db(conn)
         conn.commit()
