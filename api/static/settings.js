@@ -2,6 +2,11 @@ const STORAGE_KEY = "watchtime_api_key";
 const $ = (id) => document.getElementById(id);
 const state = { apiKey: localStorage.getItem(STORAGE_KEY) || null };
 
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
 async function apiReq(method, path, body) {
   const opts = {
     method,
@@ -57,15 +62,15 @@ async function loadLinks() {
   }
   tbody.innerHTML = links.map(l => `
     <tr>
-      <td>${l.twitch_channel}</td>
-      <td>${l.youtube_channel}</td>
+      <td>${escapeHtml(l.twitch_channel)}</td>
+      <td>${escapeHtml(l.youtube_channel)}</td>
       <td><button class="del-btn" data-id="${l.id}">Delete</button></td>
     </tr>
   `).join("");
   tbody.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       await apiReq("DELETE", `/settings/channel-links/${btn.dataset.id}`);
-      loadLinks();
+      loadLinks().catch(console.error);
     });
   });
 }
@@ -81,7 +86,7 @@ $("add-form").addEventListener("submit", async (e) => {
   });
   $("input-twitch").value = "";
   $("input-youtube").value = "";
-  loadLinks();
+  loadLinks().catch(console.error);
 });
 
 async function boot() {
