@@ -48,6 +48,21 @@ def tv():
     return FileResponse(STATIC_DIR / "tv.html")
 
 
+@app.get("/twitch", include_in_schema=False)
+def twitch_page():
+    return FileResponse(STATIC_DIR / "twitch.html")
+
+
+@app.get("/youtube", include_in_schema=False)
+def youtube_page():
+    return FileResponse(STATIC_DIR / "youtube.html")
+
+
+@app.get("/settings", include_in_schema=False)
+def settings_page():
+    return FileResponse(STATIC_DIR / "settings.html")
+
+
 # ---------- DB ----------
 
 def migrate_db(conn):
