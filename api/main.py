@@ -74,6 +74,28 @@ def init_db():
                 ON heartbeats(ts);
             CREATE INDEX IF NOT EXISTS idx_heartbeats_channel_ts
                 ON heartbeats(channel, ts);
+            CREATE TABLE IF NOT EXISTS youtube_heartbeats (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts           INTEGER NOT NULL,
+                channel      TEXT    NOT NULL,
+                title        TEXT,
+                video_id     TEXT,
+                playlist_id  TEXT,
+                state        TEXT    NOT NULL CHECK(state IN ('active','passive')),
+                tab_visible  INTEGER NOT NULL CHECK(tab_visible IN (0,1)),
+                youtube_user TEXT,
+                client_id    TEXT    NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_yt_ts
+                ON youtube_heartbeats(ts);
+            CREATE INDEX IF NOT EXISTS idx_yt_channel_ts
+                ON youtube_heartbeats(channel, ts);
+            CREATE TABLE IF NOT EXISTS channel_links (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                twitch_channel  TEXT NOT NULL,
+                youtube_channel TEXT NOT NULL,
+                UNIQUE(twitch_channel, youtube_channel)
+            );
         """)
         migrate_db(conn)
         conn.commit()
