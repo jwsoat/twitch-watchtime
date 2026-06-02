@@ -19,6 +19,25 @@ function getPlaylistId() {
 }
 
 function getChannelFromDom() {
+  // Prefer @handle from href — needed for unavatar.io avatar lookup
+  const byLink = document.querySelector(
+    "ytd-video-owner-renderer a[href^='/@'], " +
+    "ytd-channel-name a[href^='/@'], " +
+    "ytd-video-owner-renderer a[href^='/channel/'], " +
+    "yt-reel-channel-bar-view-model a[href^='/@']"
+  );
+  const href = byLink?.getAttribute("href") || "";
+  const handle = href.match(/\/@([^/?#]+)/)?.[1];
+  if (handle) return handle.toLowerCase();
+
+  const channelId = href.match(/\/channel\/([^/?#]+)/)?.[1];
+  if (channelId) return channelId.toLowerCase();
+
+  // Fallback: /@handle in URL on channel pages
+  const match = location.pathname.match(/^\/@([^/]+)/);
+  if (match) return match[1].toLowerCase();
+
+  // Last resort: display name text
   const selectors = [
     "ytd-channel-name yt-formatted-string a",
     "#channel-name yt-formatted-string a",
@@ -29,9 +48,6 @@ function getChannelFromDom() {
     const el = document.querySelector(sel);
     if (el?.textContent?.trim()) return el.textContent.trim().toLowerCase();
   }
-  // Fallback: /@handle in URL on channel pages
-  const match = location.pathname.match(/^\/@([^/]+)/);
-  if (match) return match[1].toLowerCase();
   return null;
 }
 
