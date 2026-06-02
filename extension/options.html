@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Twitch Watch Time — Settings</title>
+  <title>Watch Time Logger — Settings</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap');
 
@@ -125,7 +125,7 @@
 </head>
 <body>
   <div class="panel">
-    <h1>TWITCH WATCH TIME</h1>
+    <h1>WATCH TIME LOGGER</h1>
 
     <div class="field">
       <label for="apiUrl">API URL</label>
@@ -142,6 +142,11 @@
       <input id="twitchUser" type="text" placeholder="your login name">
     </div>
 
+    <div class="field">
+      <label for="youtubeUser">YouTube Username</label>
+      <input id="youtubeUser" type="text" placeholder="your YouTube channel handle">
+    </div>
+
     <div class="actions">
       <button id="save">Save</button>
       <span class="status-msg" id="statusMsg"></span>
@@ -155,8 +160,12 @@
         <div class="info-value" id="clientId">—</div>
       </div>
       <div>
-        <div class="info-label">Queue Length</div>
+        <div class="info-label">Twitch Queue</div>
         <div class="info-value" id="queueLen">—</div>
+      </div>
+      <div>
+        <div class="info-label">YouTube Queue</div>
+        <div class="info-value" id="ytQueueLen">—</div>
       </div>
     </div>
   </div>

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Watchtime Logger",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Logs Twitch and YouTube watch time to your own backend.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [
