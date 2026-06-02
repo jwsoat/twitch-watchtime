@@ -209,6 +209,70 @@ def youtube_heartbeats_batch(batch: YoutubeHeartbeatBatch):
     return {"ok": True, "stored": len(rows)}
 
 
+@app.get("/stats/youtube/users", dependencies=[Depends(require_api_key)])
+def yt_stats_users():
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT youtube_user AS user, MAX(ts) AS last_ts, COUNT(*) AS count
+            FROM youtube_heartbeats
+            WHERE youtube_user IS NOT NULL
+            GROUP BY youtube_user
+            ORDER BY last_ts DESC
+        """).fetchall()
+    return {
+        "users": [
+            {"user": r["user"], "last_ts": r["last_ts"], "count": r["count"]}
+            for r in rows
+        ]
+    }
+
+
+@app.get("/stats/youtube/today", dependencies=[Depends(require_api_key)])
+def yt_stats_today(include_passive: bool = True, user: Optional[str] = None):
+    return _yt_stats_since(_local_midnight(), include_passive, user)
+
+
+@app.get("/stats/youtube/week", dependencies=[Depends(require_api_key)])
+def yt_stats_week(include_passive: bool = True, user: Optional[str] = None):
+    return _yt_stats_since(int(time.time()) - 7 * 86400, include_passive, user)
+
+
+@app.get("/stats/youtube/month", dependencies=[Depends(require_api_key)])
+def yt_stats_month(include_passive: bool = True, user: Optional[str] = None):
+    return _yt_stats_since(int(time.time()) - 30 * 86400, include_passive, user)
+
+
+@app.get("/stats/youtube/all", dependencies=[Depends(require_api_key)])
+def yt_stats_all(include_passive: bool = True, user: Optional[str] = None):
+    return _yt_stats_since(0, include_passive, user)
+
+
+@app.get("/stats/youtube/playlists", dependencies=[Depends(require_api_key)])
+def yt_stats_playlists(
+    window: str = "today",
+    include_passive: bool = True,
+    user: Optional[str] = None,
+):
+    since = _window_since(window)
+    state_filter = "" if include_passive else "AND state = 'active'"
+    user_sql, user_params = _yt_user_clause(user)
+    with db() as conn:
+        rows = conn.execute(f"""
+            SELECT playlist_id, COUNT(*) AS n
+            FROM youtube_heartbeats
+            WHERE ts >= ? AND playlist_id IS NOT NULL {state_filter} {user_sql}
+            GROUP BY playlist_id
+            ORDER BY n DESC
+        """, (since, *user_params)).fetchall()
+    return {
+        "interval_seconds": HEARTBEAT_INTERVAL,
+        "playlists": [
+            {"playlist_id": r["playlist_id"], "seconds": _seconds_from_count(r["n"])}
+            for r in rows
+        ],
+    }
+
+
 def _seconds_from_count(n: int) -> int:
     return n * HEARTBEAT_INTERVAL
 
@@ -454,3 +518,31 @@ def _local_midnight() -> int:
         0, 0, 0, now.tm_wday, now.tm_yday, now.tm_isdst,
     ))
     return int(time.mktime(midnight_struct))
+
+
+def _yt_user_clause(user: Optional[str]):
+    if user is None:
+        return "", ()
+    if user == "anonymous":
+        return "AND youtube_user IS NULL", ()
+    return "AND youtube_user = ?", (user,)
+
+
+def _yt_stats_since(since: int, include_passive: bool, user: Optional[str] = None):
+    state_filter = "" if include_passive else "AND state = 'active'"
+    user_sql, user_params = _yt_user_clause(user)
+    with db() as conn:
+        rows = conn.execute(f"""
+            SELECT channel, COUNT(*) AS n
+            FROM youtube_heartbeats
+            WHERE ts >= ? {state_filter} {user_sql}
+            GROUP BY channel
+            ORDER BY n DESC
+        """, (since, *user_params)).fetchall()
+    return {
+        "interval_seconds": HEARTBEAT_INTERVAL,
+        "channels": [
+            {"channel": r["channel"], "seconds": _seconds_from_count(r["n"])}
+            for r in rows
+        ],
+    }
