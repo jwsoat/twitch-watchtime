@@ -29,7 +29,7 @@ app = FastAPI(title="Twitch Watch Time API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -155,6 +155,11 @@ class YoutubeHeartbeatBatch(BaseModel):
     heartbeats: list[YoutubeHeartbeat]
 
 
+class ChannelLink(BaseModel):
+    twitch_channel: str = Field(..., min_length=1, max_length=64)
+    youtube_channel: str = Field(..., min_length=1, max_length=128)
+
+
 # ---------- Endpoints ----------
 
 @app.get("/health")
@@ -275,6 +280,47 @@ def yt_stats_playlists(
 
 def _seconds_from_count(n: int) -> int:
     return n * HEARTBEAT_INTERVAL
+
+
+@app.get("/settings/channel-links", dependencies=[Depends(require_api_key)])
+def get_channel_links():
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT id, twitch_channel, youtube_channel FROM channel_links ORDER BY id"
+        ).fetchall()
+    return {
+        "links": [
+            {"id": r["id"], "twitch_channel": r["twitch_channel"], "youtube_channel": r["youtube_channel"]}
+            for r in rows
+        ]
+    }
+
+
+@app.post("/settings/channel-links", dependencies=[Depends(require_api_key)])
+def add_channel_link(link: ChannelLink):
+    tc = link.twitch_channel.lower()
+    yc = link.youtube_channel.lower()
+    with db() as conn:
+        try:
+            cursor = conn.execute(
+                "INSERT INTO channel_links (twitch_channel, youtube_channel) VALUES (?, ?)",
+                (tc, yc),
+            )
+            link_id = cursor.lastrowid
+        except sqlite3.IntegrityError:
+            row = conn.execute(
+                "SELECT id FROM channel_links WHERE twitch_channel = ? AND youtube_channel = ?",
+                (tc, yc),
+            ).fetchone()
+            link_id = row["id"]
+    return {"ok": True, "id": link_id}
+
+
+@app.delete("/settings/channel-links/{link_id}", dependencies=[Depends(require_api_key)])
+def delete_channel_link(link_id: int):
+    with db() as conn:
+        conn.execute("DELETE FROM channel_links WHERE id = ?", (link_id,))
+    return {"ok": True}
 
 
 @app.get("/stats/today", dependencies=[Depends(require_api_key)])
