@@ -146,7 +146,9 @@ async function updateHero() {
 
   if (nowData.channel) {
     $("live-indicator").classList.remove("hidden");
-    $("live-label").textContent = "Now watching";
+    $("live-label").textContent = nowData.youtube_user
+      ? `${nowData.youtube_user}'s now watching`
+      : "Now watching";
     $("live-channel").textContent = nowData.channel;
     $("live-title").textContent = nowData.title || "";
   } else {
