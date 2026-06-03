@@ -320,27 +320,33 @@ async function updateMerged() {
 
   const rows = buildMergedRows(twData.channels, ytData.channels, linksData.links);
   const max = rows[0]?.seconds || 1;
-  const root = $("merged-channels");
-  root.innerHTML = "";
+  const leftRoot = $("merged-left");
+  const rightRoot = $("merged-right");
+  leftRoot.innerHTML = "";
+  rightRoot.innerHTML = "";
 
-  rows.forEach((row, i) => {
+  const capped = rows.slice(0, 40);
+  capped.forEach((row, i) => {
+    const rank = i + 1;
     const badges = row.platforms.map(p =>
       `<span class="platform-badge ${p}">${p === "twitch" ? "TW" : "YT"}</span>`
     ).join(" ");
     const el = document.createElement("div");
     el.className = "ranked-row";
     el.innerHTML = `
-      <div class="rank mono">#${i + 1}</div>
+      <div class="rank mono">#${rank}</div>
       <div class="avatar" style="background:${avatarColor(row.avatar)}">${row.avatar[0].toUpperCase()}<img src="/avatars/${row.platforms[0]}/${encodeURIComponent(row.avatar)}" alt="" onerror="this.remove()"></div>
       <div class="name">${row.label} ${badges}</div>
       <div class="value mono">${fmtDuration(row.seconds)}</div>
       <div class="bar"><span style="width:${(row.seconds / max * 100).toFixed(1)}%"></span></div>
     `;
-    root.appendChild(el);
+    if (rank % 2 === 1) leftRoot.appendChild(el);
+    else rightRoot.appendChild(el);
   });
 
   if (rows.length === 0) {
-    root.innerHTML = '<div style="color:var(--muted)">No data yet.</div>';
+    leftRoot.innerHTML = '<div style="color:var(--muted)">No data yet.</div>';
+    rightRoot.innerHTML = '<div style="color:var(--muted)">No data yet.</div>';
   }
 }
 
