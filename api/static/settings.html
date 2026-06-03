@@ -94,6 +94,32 @@
       <div id="avatar-upload-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
     </div>
 
+    <div class="card" style="max-width:640px; margin-bottom:16px">
+      <h2>Data management</h2>
+      <p style="color:var(--muted); font-size:13px; margin:8px 0 16px">
+        Export, import, or download a raw backup of your watchtime database.
+      </p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px">
+        <button id="export-json-btn" type="button">Export JSON</button>
+        <button id="backup-db-btn" type="button">Download DB backup</button>
+      </div>
+      <div style="border-top:1px solid var(--border); padding-top:16px">
+        <p style="color:var(--muted); font-size:13px; margin-bottom:10px">
+          Import from a previous JSON export. <strong>Merge</strong> adds missing records.
+          <strong>Replace</strong> wipes existing data first.
+        </p>
+        <form id="import-form" class="add-row" style="align-items:center">
+          <input id="import-file" type="file" accept=".json" style="font-size:13px">
+          <select id="import-mode" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-family:inherit;font-size:13px;">
+            <option value="merge">Merge</option>
+            <option value="replace">Replace</option>
+          </select>
+          <button type="submit">Import</button>
+        </form>
+        <div id="import-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+      </div>
+    </div>
+
     <div class="card" style="max-width:640px">
       <h2>Channel links</h2>
       <p style="color:var(--muted); font-size:13px; margin:8px 0 16px">

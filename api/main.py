@@ -4,11 +4,14 @@ Heartbeat-based watch time tracker. The browser extension POSTs heartbeats
 every N seconds while a Twitch video is playing; we store them and compute
 watch time as COUNT(heartbeats) * interval.
 """
+import io
 import json
 import os
 import pathlib
 import re
+import shutil
 import sqlite3
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -17,7 +20,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -1029,3 +1032,97 @@ def _yt_stats_since(since: int, include_passive: bool, user: Optional[str] = Non
             for r in rows
         ],
     }
+
+
+# ---------- Data management (backup / export / import) ----------
+
+EXPORT_TABLES = {
+    "heartbeats": [
+        "id", "ts", "channel", "category", "title", "state",
+        "tab_visible", "client_id", "twitch_user",
+    ],
+    "youtube_heartbeats": [
+        "id", "ts", "channel", "title", "video_id", "playlist_id",
+        "state", "tab_visible", "youtube_user", "client_id",
+    ],
+    "channel_links": ["id", "twitch_channel", "youtube_channel"],
+    "user_accounts": ["id", "label", "twitch_user", "youtube_user"],
+}
+
+
+@app.get("/settings/export", dependencies=[Depends(require_api_key)])
+def export_data():
+    """Export all data as JSON."""
+    result = {"version": 1, "exported_at": int(time.time()), "tables": {}}
+    with db() as conn:
+        for table, cols in EXPORT_TABLES.items():
+            rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+            result["tables"][table] = [dict(r) for r in rows]
+    return result
+
+
+@app.get("/settings/backup", dependencies=[Depends(require_api_key)])
+def backup_database():
+    """Download a copy of the raw SQLite database file."""
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
+    tmp.close()
+    try:
+        with sqlite3.connect(DB_PATH) as src:
+            with sqlite3.connect(tmp.name) as dst:
+                src.backup(dst)
+        data = pathlib.Path(tmp.name).read_bytes()
+    finally:
+        os.unlink(tmp.name)
+    return Response(
+        content=data,
+        media_type="application/x-sqlite3",
+        headers={"Content-Disposition": "attachment; filename=watchtime-backup.db"},
+    )
+
+
+@app.post("/settings/import", dependencies=[Depends(require_api_key)])
+async def import_data(file: UploadFile = File(...), mode: str = "merge"):
+    """Import data from a JSON export. mode=merge (skip dupes) or mode=replace (wipe+load)."""
+    if mode not in ("merge", "replace"):
+        raise HTTPException(400, "mode must be 'merge' or 'replace'")
+
+    raw = await file.read()
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(400, "Invalid JSON file")
+
+    tables = payload.get("tables")
+    if not isinstance(tables, dict):
+        raise HTTPException(400, "Missing 'tables' key in JSON")
+
+    counts = {}
+    with db() as conn:
+        if mode == "replace":
+            for table in EXPORT_TABLES:
+                if table in tables:
+                    conn.execute(f"DELETE FROM {table}")
+
+        for table, cols in EXPORT_TABLES.items():
+            rows = tables.get(table, [])
+            if not rows:
+                counts[table] = 0
+                continue
+            non_id_cols = [c for c in cols if c != "id"]
+            placeholders = ", ".join("?" for _ in non_id_cols)
+            col_names = ", ".join(non_id_cols)
+            verb = "INSERT OR IGNORE" if mode == "merge" else "INSERT"
+            inserted = 0
+            for row in rows:
+                vals = [row.get(c) for c in non_id_cols]
+                try:
+                    conn.execute(
+                        f"{verb} INTO {table} ({col_names}) VALUES ({placeholders})",
+                        vals,
+                    )
+                    inserted += 1
+                except sqlite3.IntegrityError:
+                    pass
+            counts[table] = inserted
+
+    return {"status": "ok", "mode": mode, "imported": counts}

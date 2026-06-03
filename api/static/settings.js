@@ -215,6 +215,72 @@ $("add-avatar-form").addEventListener("submit", async (e) => {
   }
 });
 
+$("export-json-btn").addEventListener("click", async () => {
+  try {
+    const data = await apiReq("GET", "/settings/export");
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `watchtime-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert(`Export failed: ${err.message}`);
+  }
+});
+
+$("backup-db-btn").addEventListener("click", async () => {
+  try {
+    const res = await fetch("/settings/backup", {
+      headers: { "X-API-Key": state.apiKey },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `watchtime-backup-${new Date().toISOString().slice(0, 10)}.db`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert(`Backup failed: ${err.message}`);
+  }
+});
+
+$("import-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fileInput = $("import-file");
+  const mode = $("import-mode").value;
+  const status = $("import-status");
+  if (!fileInput.files.length) return;
+
+  if (mode === "replace" && !confirm(
+    "Replace mode will DELETE all existing data before importing. This cannot be undone. Continue?"
+  )) return;
+
+  status.textContent = "Importing...";
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  try {
+    const res = await fetch(`/settings/import?mode=${mode}`, {
+      method: "POST",
+      headers: { "X-API-Key": state.apiKey },
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const result = await res.json();
+    const summary = Object.entries(result.imported)
+      .map(([t, n]) => `${t}: ${n}`)
+      .join(", ");
+    status.textContent = `Done (${result.mode}). ${summary}`;
+    fileInput.value = "";
+    boot();
+  } catch (err) {
+    status.textContent = `Import failed: ${err.message}`;
+  }
+});
+
 async function boot() {
   await Promise.all([loadLinks(), loadAccounts(), loadCustomAvatars(), loadChannelSuggestions()]);
 }
