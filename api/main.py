@@ -651,11 +651,47 @@ def stats_daily(days: int = 30, include_passive: bool = True, user: Optional[str
 
 
 @app.get("/stats/top_channel", dependencies=[Depends(require_api_key)])
-def stats_top_channel(window: str = "today", user: Optional[str] = None):
-    """Single channel name + seconds for the given window."""
+def stats_top_channel(window: str = "today", user: Optional[str] = None, platform: str = "twitch"):
+    """Single channel name + seconds for the given window. platform: twitch|youtube|merged."""
     since = _window_since(window)
-    user_sql, user_params = _user_clause(user)
     with db() as conn:
+        if platform == "youtube":
+            yt_sql, yt_params = _yt_user_clause(user)
+            row = conn.execute(f"""
+                SELECT channel, COUNT(*) AS n
+                FROM youtube_heartbeats
+                WHERE ts >= ? {yt_sql}
+                GROUP BY channel
+                ORDER BY n DESC
+                LIMIT 1
+            """, (since, *yt_params)).fetchone()
+            if not row:
+                return {"channel": None, "seconds": 0}
+            return {"channel": row["channel"], "seconds": _seconds_from_count(row["n"])}
+        if platform == "merged":
+            tw_user, yt_user = _resolve_merged_user(conn, user)
+            tw_sql, tw_params = _user_clause(tw_user)
+            yt_sql, yt_params = _yt_user_clause(yt_user)
+            # Get top from both tables, pick overall winner
+            tw_row = conn.execute(f"""
+                SELECT channel, COUNT(*) AS n FROM heartbeats
+                WHERE ts >= ? {tw_sql}
+                GROUP BY channel ORDER BY n DESC LIMIT 1
+            """, (since, *tw_params)).fetchone()
+            yt_row = conn.execute(f"""
+                SELECT channel, COUNT(*) AS n FROM youtube_heartbeats
+                WHERE ts >= ? {yt_sql}
+                GROUP BY channel ORDER BY n DESC LIMIT 1
+            """, (since, *yt_params)).fetchone()
+            tw_sec = _seconds_from_count(tw_row["n"]) if tw_row else 0
+            yt_sec = _seconds_from_count(yt_row["n"]) if yt_row else 0
+            if tw_sec == 0 and yt_sec == 0:
+                return {"channel": None, "seconds": 0}
+            if tw_sec >= yt_sec:
+                return {"channel": tw_row["channel"], "seconds": tw_sec}
+            return {"channel": yt_row["channel"], "seconds": yt_sec}
+        # Default: twitch
+        user_sql, user_params = _user_clause(user)
         row = conn.execute(f"""
             SELECT channel, COUNT(*) AS n
             FROM heartbeats
@@ -664,30 +700,106 @@ def stats_top_channel(window: str = "today", user: Optional[str] = None):
             ORDER BY n DESC
             LIMIT 1
         """, (since, *user_params)).fetchone()
-    if not row:
-        return {"channel": None, "seconds": 0}
-    return {"channel": row["channel"], "seconds": _seconds_from_count(row["n"])}
+        if not row:
+            return {"channel": None, "seconds": 0}
+        return {"channel": row["channel"], "seconds": _seconds_from_count(row["n"])}
 
 
 @app.get("/stats/total", dependencies=[Depends(require_api_key)])
-def stats_total(window: str = "today", user: Optional[str] = None):
-    """Total seconds in a window."""
+def stats_total(window: str = "today", user: Optional[str] = None, platform: str = "twitch"):
+    """Total seconds in a window. platform: twitch|youtube|merged."""
     since = _window_since(window)
-    user_sql, user_params = _user_clause(user)
     with db() as conn:
+        if platform == "youtube":
+            yt_sql, yt_params = _yt_user_clause(user)
+            row = conn.execute(f"""
+                SELECT COUNT(*) AS n FROM youtube_heartbeats
+                WHERE ts >= ? {yt_sql}
+            """, (since, *yt_params)).fetchone()
+            return {"window": window, "seconds": _seconds_from_count(row["n"])}
+        if platform == "merged":
+            tw_user, yt_user = _resolve_merged_user(conn, user)
+            tw_sql, tw_params = _user_clause(tw_user)
+            yt_sql, yt_params = _yt_user_clause(yt_user)
+            tw_row = conn.execute(f"""
+                SELECT COUNT(*) AS n FROM heartbeats
+                WHERE ts >= ? {tw_sql}
+            """, (since, *tw_params)).fetchone()
+            yt_row = conn.execute(f"""
+                SELECT COUNT(*) AS n FROM youtube_heartbeats
+                WHERE ts >= ? {yt_sql}
+            """, (since, *yt_params)).fetchone()
+            total = _seconds_from_count(tw_row["n"]) + _seconds_from_count(yt_row["n"])
+            return {"window": window, "seconds": total}
+        # Default: twitch
+        user_sql, user_params = _user_clause(user)
         row = conn.execute(f"""
             SELECT COUNT(*) AS n FROM heartbeats
             WHERE ts >= ? {user_sql}
         """, (since, *user_params)).fetchone()
-    return {"window": window, "seconds": _seconds_from_count(row["n"])}
+        return {"window": window, "seconds": _seconds_from_count(row["n"])}
 
 
 @app.get("/stats/now", dependencies=[Depends(require_api_key)])
-def stats_now(user: Optional[str] = None):
-    """Most recent heartbeat in last 120s, or {'now': None}."""
+def stats_now(user: Optional[str] = None, platform: str = "twitch"):
+    """Most recent heartbeat in last 120s, or {'now': None}. platform: twitch|youtube|merged."""
     cutoff = int(time.time()) - 120
-    user_sql, user_params = _user_clause(user)
     with db() as conn:
+        if platform == "youtube":
+            yt_sql, yt_params = _yt_user_clause(user)
+            row = conn.execute(f"""
+                SELECT ts, channel, title, youtube_user
+                FROM youtube_heartbeats
+                WHERE ts >= ? AND state = 'active' {yt_sql}
+                ORDER BY ts DESC
+                LIMIT 1
+            """, (cutoff, *yt_params)).fetchone()
+            if not row:
+                return {"now": None}
+            return {
+                "ts": row["ts"],
+                "channel": row["channel"],
+                "category": None,
+                "title": row["title"],
+                "twitch_user": row["youtube_user"],
+            }
+        if platform == "merged":
+            tw_user, yt_user = _resolve_merged_user(conn, user)
+            tw_sql, tw_params = _user_clause(tw_user)
+            yt_sql, yt_params = _yt_user_clause(yt_user)
+            tw_row = conn.execute(f"""
+                SELECT ts, channel, category, title, twitch_user
+                FROM heartbeats WHERE ts >= ? {tw_sql}
+                ORDER BY ts DESC LIMIT 1
+            """, (cutoff, *tw_params)).fetchone()
+            yt_row = conn.execute(f"""
+                SELECT ts, channel, title, youtube_user
+                FROM youtube_heartbeats
+                WHERE ts >= ? AND state = 'active' {yt_sql}
+                ORDER BY ts DESC LIMIT 1
+            """, (cutoff, *yt_params)).fetchone()
+            # Pick most recent across both platforms
+            tw_ts = tw_row["ts"] if tw_row else 0
+            yt_ts = yt_row["ts"] if yt_row else 0
+            if tw_ts == 0 and yt_ts == 0:
+                return {"now": None}
+            if tw_ts >= yt_ts:
+                return {
+                    "ts": tw_row["ts"],
+                    "channel": tw_row["channel"],
+                    "category": tw_row["category"],
+                    "title": tw_row["title"],
+                    "twitch_user": tw_row["twitch_user"],
+                }
+            return {
+                "ts": yt_row["ts"],
+                "channel": yt_row["channel"],
+                "category": None,
+                "title": yt_row["title"],
+                "twitch_user": yt_row["youtube_user"],
+            }
+        # Default: twitch
+        user_sql, user_params = _user_clause(user)
         row = conn.execute(f"""
             SELECT ts, channel, category, title, twitch_user
             FROM heartbeats
@@ -707,16 +819,38 @@ def stats_now(user: Optional[str] = None):
 
 
 @app.get("/stats/channel", dependencies=[Depends(require_api_key)])
-def stats_channel(channel: str, window: str = "today", user: Optional[str] = None):
-    """Seconds watched for a specific channel in a window."""
+def stats_channel(channel: str, window: str = "today", user: Optional[str] = None, platform: str = "twitch"):
+    """Seconds watched for a specific channel in a window. platform: twitch|youtube|merged."""
     since = _window_since(window)
-    user_sql, user_params = _user_clause(user)
     with db() as conn:
+        if platform == "youtube":
+            yt_sql, yt_params = _yt_user_clause(user)
+            row = conn.execute(f"""
+                SELECT COUNT(*) AS n FROM youtube_heartbeats
+                WHERE ts >= ? AND channel = ? {yt_sql}
+            """, (since, channel, *yt_params)).fetchone()
+            return {"channel": channel, "window": window, "seconds": _seconds_from_count(row["n"])}
+        if platform == "merged":
+            tw_user, yt_user = _resolve_merged_user(conn, user)
+            tw_sql, tw_params = _user_clause(tw_user)
+            yt_sql, yt_params = _yt_user_clause(yt_user)
+            tw_row = conn.execute(f"""
+                SELECT COUNT(*) AS n FROM heartbeats
+                WHERE ts >= ? AND channel = ? {tw_sql}
+            """, (since, channel, *tw_params)).fetchone()
+            yt_row = conn.execute(f"""
+                SELECT COUNT(*) AS n FROM youtube_heartbeats
+                WHERE ts >= ? AND channel = ? {yt_sql}
+            """, (since, channel, *yt_params)).fetchone()
+            total = _seconds_from_count(tw_row["n"]) + _seconds_from_count(yt_row["n"])
+            return {"channel": channel, "window": window, "seconds": total}
+        # Default: twitch
+        user_sql, user_params = _user_clause(user)
         row = conn.execute(f"""
             SELECT COUNT(*) AS n FROM heartbeats
             WHERE ts >= ? AND channel = ? {user_sql}
         """, (since, channel, *user_params)).fetchone()
-    return {"channel": channel, "window": window, "seconds": _seconds_from_count(row["n"])}
+        return {"channel": channel, "window": window, "seconds": _seconds_from_count(row["n"])}
 
 
 @app.get("/stats/users", dependencies=[Depends(require_api_key)])
@@ -743,11 +877,21 @@ def stats_users():
 
 
 @app.get("/stats/categories", dependencies=[Depends(require_api_key)])
-def stats_categories(window: str = "today", user: Optional[str] = None):
-    """Top 10 categories by seconds in window. Excludes NULL categories."""
+def stats_categories(window: str = "today", user: Optional[str] = None, platform: str = "twitch"):
+    """Top 10 categories by seconds in window. platform: twitch|youtube|merged.
+
+    YouTube heartbeats have no category column, so youtube returns empty.
+    Merged returns Twitch categories only (YouTube has none to merge).
+    """
+    if platform == "youtube":
+        return {"categories": []}
     since = _window_since(window)
-    user_sql, user_params = _user_clause(user)
     with db() as conn:
+        if platform == "merged":
+            tw_user, _ = _resolve_merged_user(conn, user)
+            user_sql, user_params = _user_clause(tw_user)
+        else:
+            user_sql, user_params = _user_clause(user)
         rows = conn.execute(f"""
             SELECT category, COUNT(*) AS n
             FROM heartbeats
@@ -848,6 +992,23 @@ def _yt_user_clause(user: Optional[str]):
     if user == "anonymous":
         return "AND youtube_user IS NULL", ()
     return "AND youtube_user = ?", (user,)
+
+
+def _resolve_merged_user(conn, label: Optional[str]):
+    """Look up a user_accounts label and return (twitch_user, youtube_user).
+
+    Returns (None, None) if label is None (= all accounts).
+    Raises 404 if label not found.
+    """
+    if label is None:
+        return None, None
+    row = conn.execute(
+        "SELECT twitch_user, youtube_user FROM user_accounts WHERE label = ?",
+        (label,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Merged account '{label}' not found")
+    return row["twitch_user"], row["youtube_user"]
 
 
 def _yt_stats_since(since: int, include_passive: bool, user: Optional[str] = None):
